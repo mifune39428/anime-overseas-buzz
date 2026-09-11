@@ -29,7 +29,7 @@ Anime Corner の見出し ──┘   整形・日本語化・推移の保持   
 | 何を | どこから | 備考 |
 | --- | --- | --- |
 | 週間カルマ・コメント数・順位 | [r/anime Karma Chart](https://github.com/abysswatcherbel/abysswatcherbel.github.io)（abysswatcherbel）の週次JSON | r/anime の各話スレッドを Reddit API で集計したもの。サイト下部で出典を明記している |
-| スコア・登録者数・日本語タイトル | MyAnimeList（[Jikan API](https://jikan.moe/)） | `titles.json` にキャッシュし、7日ごとに取り直す |
+| スコア・登録者数・日本語タイトル | MyAnimeList（[Jikan API](https://jikan.moe/)）。応じないときは MAL の作品ページから日本語タイトルと登録者数だけを拾う | `titles.json` にキャッシュし、7日ごとに取り直す。どちらから取ったかは `src` に残る |
 | 海外ニュースの見出し | Anime Corner の RSS | 見出しとリンクのみ |
 
 Reddit 本体の `.json` は未認証だと弾かれるようになったため、直接は叩いていない。
@@ -60,8 +60,14 @@ python3 collect.py          # ふだんの更新（MALへの問い合わせは40
 python3 collect.py --full   # 日本語タイトルをまとめて取りに行く（初回や、季節が変わった直後）
 ```
 
-MyAnimeList は Jikan 越しに 504 を返すことがよくある。取れなかった作品は英題のまま表示され、
-次の実行で優先的に取り直される（`titles.json` に溜まっていく）。
+MyAnimeList は Jikan 越しに 504 を返すことがよくある（2026-09 現在、キャッシュ済み以外はほぼ通らない）。
+その場合は **MAL の作品ページから日本語タイトルと登録者数だけ**を拾う控えに切り替わる。
+ページの文章は取らない。1秒に1件のペースで、取れた分は `titles.json` に残るので取り直しは起きない。
+Jikan が25回続けて応じなければ、その回はAPIを諦めてページ側だけで拾う。
+どちらも駄目なら英題のまま表示し、次の実行で優先的に拾い直す。
+
+GitHub Actions 側（データセンターのIP）からページ取得が弾かれる可能性はある。
+その場合でもサイトは英題で成立し、手元で `更新.command` を1度動かせばキャッシュが埋まる。
 
 ## 設定
 
@@ -77,5 +83,6 @@ MyAnimeList は Jikan 越しに 504 を返すことがよくある。取れな�
 - `REFRESH_DAYS = 7` — スコアと登録者数を取り直す間隔
 - `NOTE_TOP_N = 10` — 週の総括を書かせるときに渡す上位作品数
 - `NOTE_MAX_PER_RUN = 6` — 1回の実行で新しく書かせる総括の数（新しい週から順に埋まる）
-- `JIKAN_GIVEUP_AFTER = 8` — MALに連続で繋がらなかったとき、その回を打ち切る回数
+- `JIKAN_GIVEUP_AFTER = 25` — Jikanを諦めてMALのページ側に切り替えるまでの連続失敗回数
+- `PAGE_GIVEUP_AFTER = 5` — ページ取得も続けて失敗したとき、その回を打ち切る回数
 - `NEWS_MAX = 12` — 載せる見出しの本数

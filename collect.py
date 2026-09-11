@@ -50,6 +50,8 @@ CHART_CREDIT = {
 }
 
 JIKAN_ANIME = "https://api.jikan.moe/v4/anime/{mal_id}"
+# Jikan が 504 を返し続けるとき用の控え。MAL の作品ページから日本語タイトルだけ拾う。
+MAL_PAGE = "https://myanimelist.net/anime/{mal_id}"
 ANIME_CORNER_FEED = "https://animecorner.me/feed/"
 
 SEASON_ORDER = ["winter", "spring", "summer", "fall"]
@@ -68,6 +70,8 @@ JIKAN_INTERVAL = 1.1
 # 504 は「MAL側に取りに行けなかった」という意味で、粘っても同じ回であることが多い。
 # そのIDは早々に諦めて次へ進み、連続でこの回数しくじったらその回ごと打ち切る。
 JIKAN_GIVEUP_AFTER = 25
+# 控えのページ取得も、連続でこの回数しくじったらその回は打ち切る。
+PAGE_GIVEUP_AFTER = 5
 # スコアと登録者数を取り直す間隔。
 REFRESH_DAYS = 7
 # 週の総括を書かせる対象（上位何作品の数字を渡すか）。
@@ -269,6 +273,32 @@ def jikan_budget() -> int:
     return JIKAN_MAX_PER_RUN
 
 
+def mal_page_lookup(mal_id: str) -> dict | None:
+    """MAL の作品ページから日本語タイトルと登録者数だけを取り出す。
+
+    Jikan（MAL公式の無料API）が 504 を返し続けるときの控え。
+    載せるのは事実の項目だけで、ページの文章は取らない。
+    """
+    raw = fetch(MAL_PAGE.format(mal_id=mal_id), tries=2, backoff=2)
+    if not raw:
+        return None
+    page = raw.decode("utf-8", "replace")
+
+    def field(label: str) -> str:
+        m = re.search(label + r":</span>(.*?)</div>", page, re.S)
+        return strip_tags(m.group(1)) if m else ""
+
+    ja = field("Japanese")
+    if not ja:
+        return None
+    members = re.search(r"Members:</span>\s*([\d,]+)", page)
+    return {
+        "ja": ja,
+        "members": int(members.group(1).replace(",", "")) if members else None,
+        "mal": MAL_PAGE.format(mal_id=mal_id),
+    }
+
+
 def enrich_titles(anime: dict, cache: dict) -> None:
     """日本語タイトルと登録者数を Jikan から補う。取れた分はキャッシュに残す。"""
     today = jst_now().date().isoformat()
@@ -286,29 +316,54 @@ def enrich_titles(anime: dict, cache: dict) -> None:
     if todo:
         print(f"MyAnimeList から {len(todo)} 作品を取得")
 
-    misses = 0
+    use_jikan = True      # 504 が続いたら、その回はAPIを諦めてページ側だけで拾う
+    jikan_misses = 0
+    page_misses = 0
     for i, (_, mal_id) in enumerate(todo):
         if i:
             time.sleep(JIKAN_INTERVAL)
-        data = fetch_json(JIKAN_ANIME.format(mal_id=mal_id), tries=2, backoff=1)
-        d = (data or {}).get("data") if isinstance(data, dict) else None
-        if not d:
-            misses += 1
-            if misses >= JIKAN_GIVEUP_AFTER:
-                print(
-                    f"  MyAnimeList に{misses}回続けて繋がらないので、この回は打ち切ります",
-                    file=sys.stderr,
-                )
-                break
-            continue
-        misses = 0
-        cache[mal_id] = {
-            "ja": d.get("title_japanese") or "",
-            "score": d.get("score"),
-            "members": d.get("members"),
-            "mal": d.get("url") or f"https://myanimelist.net/anime/{mal_id}",
-            "fetched": today,
-        }
+        record = None
+
+        if use_jikan:
+            data = fetch_json(JIKAN_ANIME.format(mal_id=mal_id), tries=2, backoff=1)
+            d = (data or {}).get("data") if isinstance(data, dict) else None
+            if d:
+                jikan_misses = 0
+                record = {
+                    "ja": d.get("title_japanese") or "",
+                    "score": d.get("score"),
+                    "members": d.get("members"),
+                    "mal": d.get("url") or MAL_PAGE.format(mal_id=mal_id),
+                    "src": "jikan",
+                }
+            else:
+                jikan_misses += 1
+                if jikan_misses >= JIKAN_GIVEUP_AFTER:
+                    use_jikan = False
+                    print(
+                        f"  Jikan が{jikan_misses}回続けて応じないので、"
+                        "この回はMALのページから拾います",
+                        file=sys.stderr,
+                    )
+
+        if record is None or not record.get("ja"):
+            page = mal_page_lookup(mal_id)
+            if page:
+                page_misses = 0
+                record = {**page, "score": (record or {}).get("score"), "src": "page"}
+            else:
+                page_misses += 1
+                if page_misses >= PAGE_GIVEUP_AFTER:
+                    print(
+                        f"  MyAnimeList に{page_misses}回続けて繋がらないので、"
+                        "この回は打ち切ります",
+                        file=sys.stderr,
+                    )
+                    break
+                if record is None:
+                    continue
+
+        cache[mal_id] = {**record, "fetched": today}
 
     got = sum(1 for _, m in todo if cache.get(m, {}).get("fetched") == today)
     if todo:
