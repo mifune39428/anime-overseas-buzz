@@ -1,0 +1,16 @@
+{
+  "name": "アニメ海外人気ウォッチ",
+  "short_name": "海外人気",
+  "description": "海外の掲示板でいま、どのアニメが票を集めているかを毎週の数字で追いかけるサイト",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0d0f16",
+  "theme_color": "#0d0f16",
+  "lang": "ja",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
