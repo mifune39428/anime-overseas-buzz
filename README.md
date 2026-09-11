@@ -56,6 +56,10 @@ r/anime の集計は**金曜始まり**。週1は「その季節の最初の日�
 | `docs/data.json` | 生成データ。Actions が自動コミットする |
 | `.github/workflows/update.yml` | 1日2回の自動実行 |
 | `更新.command` | Mac から手動で即更新（ダブルクリック） |
+| `notify.py` | 新しい週が載ったらメールで知らせる（Mac の launchd から1日4回） |
+| `mail.py` | 通知メールの組み立てと送信 |
+| `credentials.py` / `config.json` | メール設定の読み込み（`config_unified.json` を借りる） |
+| `notified.json` | 最後に知らせた週。同じ週を二度送らないための記録 |
 
 ## 使い方
 
@@ -99,6 +103,24 @@ REDDIT_CLIENT_SECRET=（secret の欄）
   使う場合は GitHub Secrets か、このフォルダの `.env` に `GEMINI_API_KEY` などを置く（gitignore 済み）。
 - 公開するには GitHub の Pages 設定で「Deploy from a branch」→ `main` / `docs` を選ぶ。
 
+## 新しい週が出たらメールで知らせる
+
+`notify.py` が公開中の `data.json` を見て、最新の週が前回知らせたものと違えば1通送る。
+週が変わっていなければ何もしない。
+
+- **送るタイミング** … 新しい週が「順位表として読める」状態になってから。
+  数字は放送から48時間かけて積み上がるので、週が現れた直後は数作品しか載っていない。
+  前の週の作品数の6割（最低20作品）を超えるまで待つ。結果として週1通ペースになる。
+- **中身** … その週のトップ10（順位・話数・票・増減）、週の総括、海外の反応、サイトへのリンク。
+- **メール設定** … 他のツールと同じ `config_unified.json` の `email_settings` を借りる。
+  パスワードの置き場所を増やさないため、GitHub Secrets には入れていない
+  （＝送信は Mac 側の launchd が担当し、GitHub Actions はサイトの更新だけを行う）。
+- **実行** … `~/Library/LaunchAgents/com.miffy.animebuzz.plist`（8:10 / 13:10 / 19:10 / 23:10）。
+  サイト側の自動更新は遅れることがあるので、1日に何度か見に行って条件が整った回で1通だけ出す。
+
+手で確かめたいときは `python3 notify.py`。同じ週を二度は送らないので、
+もう一度送りたいときは `notified.json` を消してから実行する。
+
 ## 調整しどころ（`collect.py` の定数）
 
 - `KEEP_SEASONS = 2` — サイトに残す季節の数（今季と前季）
@@ -113,3 +135,5 @@ REDDIT_CLIENT_SECRET=（secret の欄）
 - `REACTION_TOP_N = 10` / `REACTION_PER_THREAD = 5` — 反応を拾う作品数と、1スレッドあたりの件数
 - `REACTION_MAX_PER_RUN = 5` / `REACTION_INTERVAL = 30` — 1回の実行で取りに行くスレッド数と、その間隔（秒）
 - `REACTION_KEEP_WEEKS = 3` — 反応を残す週数
+
+`notify.py` 側は `MIN_RATIO = 0.6` / `MIN_ENTRIES = 20`（新しい週を知らせる目安）。
