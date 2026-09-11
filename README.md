@@ -32,10 +32,10 @@ Anime Corner の見出し ──┘   整形・日本語化・推移の保持   
 | 週間カルマ・コメント数・順位 | [r/anime Karma Chart](https://github.com/abysswatcherbel/abysswatcherbel.github.io)（abysswatcherbel）の週次JSON | r/anime の各話スレッドを Reddit API で集計したもの。サイト下部で出典を明記している |
 | スコア・登録者数・日本語タイトル | MyAnimeList（[Jikan API](https://jikan.moe/)）。応じないときは MAL の作品ページから日本語タイトルと登録者数だけを拾う | `titles.json` にキャッシュし、7日ごとに取り直す。どちらから取ったかは `src` に残る |
 | 海外ニュースの見出し | Anime Corner の RSS | 見出しとリンクのみ |
-| コメントの抜粋 | Reddit API（OAuth。`REDDIT_CLIENT_ID` / `REDDIT_CLIENT_SECRET` を置いたときだけ動く） | 上位10作品×5件。原文は保存せず、日本語にしたものと書き手・票数・原文リンクだけ持つ |
+| コメントの抜粋 | Reddit のコメントRSS（認証不要）。`REDDIT_CLIENT_ID` を置けば票数の取れるAPI経路に切り替わる | 上位10作品×5件。原文は保存せず、日本語にしたものと書き手・原文リンクだけ持つ |
 
-Reddit 本体の `.json` は未認証だと弾かれる（403）ため、コメントを取るには OAuth が要る。
-順位とカルマの集計は、上のチャートを使うので認証なしでも動く。
+Reddit 本体の `.json` は未認証だと弾かれる（403）が、**RSS は認証なしで読める**のでそちらを使う。
+順位とカルマの集計は、上のチャートを使うのでこれも認証不要。
 AniList の公開APIも 2026-09 現在は停止中（`The AniList API has been temporarily disabled`）なので使っていない。
 
 ## 週と日付
@@ -75,20 +75,23 @@ GitHub Actions 側（データセンターのIP）からページ取得が弾か
 
 ## 設定
 
-### 海外のコメントを載せる（任意）
+### 海外のコメント
 
-1. https://www.reddit.com/prefs/apps で「create another app...」を押す
-2. 種別は **script** を選ぶ。name は何でもよい。redirect uri は `http://localhost:8080`（script では使われない）
-3. 作成後、アプリ名の下に出る文字列が **client ID**、`secret` の欄が **client secret**
-4. このフォルダの `.env` に置く（GitHub Actions で動かすなら Secrets にも同じ名前で入れる）
+**設定は要らない。** Reddit のコメントRSS（`/comments/<id>.rss`）は認証なしで読めるので、
+そのまま動く。ただし連続で叩くとすぐ 429 が返るため、1スレッドごとに30秒空け、
+1回の実行で新しく取りに行くのは5スレッドまでにしてある。残りは次の実行で埋まる。
+一度取ったスレッドは `reactions.json` に残り、取り直しはしない。
+
+RSS には**票数が入らない**ので「票の多い順」には並べられない。代わりに、ボットの投稿を除いた
+書き込みをまとめて LLM に渡し、反応として分かりやすいものを選ばせている。
+
+票数まで出したい場合だけ、Reddit の script アプリを登録して `.env` に置くと、
+票の多い順に並ぶAPI経路へ自動で切り替わる（任意）。
 
 ```
-REDDIT_CLIENT_ID=（アプリ名の下の文字列）
+REDDIT_CLIENT_ID=（https://www.reddit.com/prefs/apps で作った script アプリの、名前の下の文字列）
 REDDIT_CLIENT_SECRET=（secret の欄）
 ```
-
-置かなければ、この機能だけが静かに省かれる（サイトの他の部分は変わらず動く）。
-一度取ったスレッドは `reactions.json` に残り、取り直しはしない。
 
 ### そのほかの設定
 
@@ -108,4 +111,5 @@ REDDIT_CLIENT_SECRET=（secret の欄）
 - `PAGE_GIVEUP_AFTER = 5` — ページ取得も続けて失敗したとき、その回を打ち切る回数
 - `NEWS_MAX = 12` — 載せる見出しの本数
 - `REACTION_TOP_N = 10` / `REACTION_PER_THREAD = 5` — 反応を拾う作品数と、1スレッドあたりの件数
+- `REACTION_MAX_PER_RUN = 5` / `REACTION_INTERVAL = 30` — 1回の実行で取りに行くスレッド数と、その間隔（秒）
 - `REACTION_KEEP_WEEKS = 3` — 反応を残す週数
