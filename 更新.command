@@ -6,7 +6,7 @@ python3 collect.py || { echo "取得に失敗しました"; read -r -p "Enterで
 if git diff --quiet docs/data.json 2>/dev/null; then
   echo "先週から動きはありませんでした。"
 else
-  git add docs/data.json titles.json notes.json
+  git add docs/data.json titles.json notes.json reactions.json
   git commit -m "海外人気の手動更新 $(date '+%Y-%m-%d %H:%M')" && git push && echo "公開サイトに反映しました。"
 fi
 read -r -p "Enterで閉じる"

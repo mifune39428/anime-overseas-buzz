@@ -21,6 +21,7 @@ Anime Corner の見出し ──┘   整形・日本語化・推移の保持   
 - 週ごとの短い**日本語の総括**（LLM に数字だけを渡して書かせる。翻訳ではない）
 - 作品ごとの**票の推移**（折れ線とその週ごとの表）
 - Anime Corner の**見出しとリンク**（本文は取らない。見出しは日本語の一行に直して併記）
+- 最新の週の上位作品には、**海外のコメントの抜粋を日本語にしたもの**を数件（書き手の名前から原文へ飛べる）
 
 サムネイルは MyAnimeList の画像URLをそのまま参照している（画像そのものはこのリポジトリに置いていない）。
 
@@ -31,8 +32,10 @@ Anime Corner の見出し ──┘   整形・日本語化・推移の保持   
 | 週間カルマ・コメント数・順位 | [r/anime Karma Chart](https://github.com/abysswatcherbel/abysswatcherbel.github.io)（abysswatcherbel）の週次JSON | r/anime の各話スレッドを Reddit API で集計したもの。サイト下部で出典を明記している |
 | スコア・登録者数・日本語タイトル | MyAnimeList（[Jikan API](https://jikan.moe/)）。応じないときは MAL の作品ページから日本語タイトルと登録者数だけを拾う | `titles.json` にキャッシュし、7日ごとに取り直す。どちらから取ったかは `src` に残る |
 | 海外ニュースの見出し | Anime Corner の RSS | 見出しとリンクのみ |
+| コメントの抜粋 | Reddit API（OAuth。`REDDIT_CLIENT_ID` / `REDDIT_CLIENT_SECRET` を置いたときだけ動く） | 上位10作品×5件。原文は保存せず、日本語にしたものと書き手・票数・原文リンクだけ持つ |
 
-Reddit 本体の `.json` は未認証だと弾かれるようになったため、直接は叩いていない。
+Reddit 本体の `.json` は未認証だと弾かれる（403）ため、コメントを取るには OAuth が要る。
+順位とカルマの集計は、上のチャートを使うので認証なしでも動く。
 AniList の公開APIも 2026-09 現在は停止中（`The AniList API has been temporarily disabled`）なので使っていない。
 
 ## 週と日付
@@ -48,6 +51,7 @@ r/anime の集計は**金曜始まり**。週1は「その季節の最初の日�
 | `llm_providers.py` | LLMの多段フォールバック（`akita_news_site` からのコピー） |
 | `titles.json` | MAL の日本語タイトル・登録者数のキャッシュ |
 | `notes.json` | 生成済みの週の総括と見出し日本語訳のキャッシュ（数字が変わった週だけ作り直す） |
+| `reactions.json` | 取得済みのコメント抜粋（日本語）のキャッシュ。直近3週ぶんだけ残す |
 | `docs/index.html` | サイト本体（依存なしの1ファイル、PWA対応） |
 | `docs/data.json` | 生成データ。Actions が自動コミットする |
 | `.github/workflows/update.yml` | 1日2回の自動実行 |
@@ -71,6 +75,23 @@ GitHub Actions 側（データセンターのIP）からページ取得が弾か
 
 ## 設定
 
+### 海外のコメントを載せる（任意）
+
+1. https://www.reddit.com/prefs/apps で「create another app...」を押す
+2. 種別は **script** を選ぶ。name は何でもよい。redirect uri は `http://localhost:8080`（script では使われない）
+3. 作成後、アプリ名の下に出る文字列が **client ID**、`secret` の欄が **client secret**
+4. このフォルダの `.env` に置く（GitHub Actions で動かすなら Secrets にも同じ名前で入れる）
+
+```
+REDDIT_CLIENT_ID=（アプリ名の下の文字列）
+REDDIT_CLIENT_SECRET=（secret の欄）
+```
+
+置かなければ、この機能だけが静かに省かれる（サイトの他の部分は変わらず動く）。
+一度取ったスレッドは `reactions.json` に残り、取り直しはしない。
+
+### そのほかの設定
+
 - **LLM は任意**。キーが無くても数字・推移・リンクは全部出る（総括と見出しの日本語訳だけが省かれる）。
   使う場合は GitHub Secrets か、このフォルダの `.env` に `GEMINI_API_KEY` などを置く（gitignore 済み）。
 - 公開するには GitHub の Pages 設定で「Deploy from a branch」→ `main` / `docs` を選ぶ。
@@ -86,3 +107,5 @@ GitHub Actions 側（データセンターのIP）からページ取得が弾か
 - `JIKAN_GIVEUP_AFTER = 25` — Jikanを諦めてMALのページ側に切り替えるまでの連続失敗回数
 - `PAGE_GIVEUP_AFTER = 5` — ページ取得も続けて失敗したとき、その回を打ち切る回数
 - `NEWS_MAX = 12` — 載せる見出しの本数
+- `REACTION_TOP_N = 10` / `REACTION_PER_THREAD = 5` — 反応を拾う作品数と、1スレッドあたりの件数
+- `REACTION_KEEP_WEEKS = 3` — 反応を残す週数
