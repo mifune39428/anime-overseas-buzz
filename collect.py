@@ -14,6 +14,7 @@ LLM は「あると良い」程度の扱いで、APIキーが無くてもサイ�
 
 from __future__ import annotations
 
+import base64
 import datetime as dt
 import hashlib
 import html
@@ -33,6 +34,7 @@ sys.path.insert(0, BASE_DIR)
 OUTPUT_PATH = os.path.join(BASE_DIR, "docs", "data.json")
 TITLES_PATH = os.path.join(BASE_DIR, "titles.json")
 NOTES_PATH = os.path.join(BASE_DIR, "notes.json")
+REACTIONS_PATH = os.path.join(BASE_DIR, "reactions.json")
 
 USER_AGENT = "anime-overseas-buzz/1.0 (+https://github.com/mifune39428)"
 FETCH_TIMEOUT = 25
@@ -53,6 +55,11 @@ JIKAN_ANIME = "https://api.jikan.moe/v4/anime/{mal_id}"
 # Jikan が 504 を返し続けるとき用の控え。MAL の作品ページから日本語タイトルだけ拾う。
 MAL_PAGE = "https://myanimelist.net/anime/{mal_id}"
 ANIME_CORNER_FEED = "https://animecorner.me/feed/"
+
+# r/anime のコメント。未認証では取れないので、Reddit の「script」アプリを登録して
+# REDDIT_CLIENT_ID / REDDIT_CLIENT_SECRET を .env に置いたときだけ動く。
+REDDIT_TOKEN_URL = "https://www.reddit.com/api/v1/access_token"
+REDDIT_COMMENTS = "https://oauth.reddit.com/comments/{post_id}"
 
 SEASON_ORDER = ["winter", "spring", "summer", "fall"]
 SEASON_JA = {"winter": "冬", "spring": "春", "summer": "夏", "fall": "秋"}
@@ -81,6 +88,16 @@ NOTE_TOP_N = 10
 NOTE_MAX_PER_RUN = 6
 # 見出しを日本語にする本数の上限。
 NEWS_MAX = 12
+
+# --- 海外の反応（コメントの抜粋）---
+# 最新の週の上位何作品ぶん、スレッドを見に行くか。
+REACTION_TOP_N = 10
+# 1スレッドから拾うコメントの数。
+REACTION_PER_THREAD = 5
+# LLM に渡す前に、1コメントをこの文字数で切る（全文は取り込まない）。
+REACTION_EXCERPT = 600
+# 何週ぶんの反応を残すか（古い週のものは落とす）。
+REACTION_KEEP_WEEKS = 3
 
 
 # ---------------------------------------------------------------- 小道具
@@ -421,6 +438,181 @@ def parse_rss_date(value: str) -> str:
     return ""
 
 
+# ---------------------------------------------------------------- 海外の反応
+
+REDDIT_KEYS = ("REDDIT_CLIENT_ID", "REDDIT_CLIENT_SECRET")
+
+
+def reddit_token() -> str | None:
+    """アプリ単体（client_credentials）でアクセストークンを取る。
+
+    Reddit は未認証だと 403 を返すようになったので、コメントを見るには
+    「script」種別のアプリを登録して、その ID と secret を .env に置く必要がある。
+    置いていなければ、この機能ごと静かに省かれる。
+    """
+    cid = os.environ.get("REDDIT_CLIENT_ID")
+    secret = os.environ.get("REDDIT_CLIENT_SECRET")
+    if not cid or not secret:
+        return None
+    body = urllib.parse.urlencode({"grant_type": "client_credentials"}).encode()
+    auth = base64.b64encode(f"{cid}:{secret}".encode()).decode()
+    req = urllib.request.Request(
+        REDDIT_TOKEN_URL,
+        data=body,
+        headers={
+            "Authorization": f"Basic {auth}",
+            "User-Agent": USER_AGENT,
+            "Content-Type": "application/x-www-form-urlencoded",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=FETCH_TIMEOUT) as res:
+            return json.load(res).get("access_token")
+    except Exception as e:  # noqa: BLE001
+        print(f"  ! Reddit の認証に失敗: {type(e).__name__}", file=sys.stderr)
+        return None
+
+
+def post_id(url: str) -> str:
+    """スレッドのURLから投稿IDを取り出す。"""
+    m = re.search(r"/comments/([a-z0-9]+)", url or "")
+    return m.group(1) if m else ""
+
+
+def clean_comment(text: str) -> str:
+    """引用・リンク・装飾を落として、地の文だけを残す。"""
+    text = html.unescape(text or "")
+    text = re.sub(r"(?m)^\s*>.*$", " ", text)                          # 引用行
+    text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)             # リンク
+    text = re.sub(r"https?://\S+", " ", text)
+    text = re.sub(r"[*_~`#^]+", "", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def fetch_comments(token: str, url: str) -> list[dict]:
+    """1スレッドから、票の多いコメントを数件ぶん取る。
+
+    取るのは「誰が・何票・どこに」と、日本語にするための短い抜粋だけ。
+    原文はこのリポジトリに保存しない。
+    """
+    pid = post_id(url)
+    if not pid:
+        return []
+    query = urllib.parse.urlencode(
+        {"sort": "top", "limit": 25, "depth": 1, "raw_json": 1}
+    )
+    req = urllib.request.Request(
+        f"{REDDIT_COMMENTS.format(post_id=pid)}?{query}",
+        headers={"Authorization": f"bearer {token}", "User-Agent": USER_AGENT},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=FETCH_TIMEOUT) as res:
+            payload = json.load(res)
+    except Exception as e:  # noqa: BLE001
+        print(f"  ! コメントを取れません（{pid}）: {type(e).__name__}", file=sys.stderr)
+        return []
+
+    try:
+        children = payload[1]["data"]["children"]
+    except (IndexError, KeyError, TypeError):
+        return []
+
+    out = []
+    for child in children:
+        if child.get("kind") != "t1":
+            continue
+        d = child.get("data") or {}
+        author = d.get("author") or ""
+        body = clean_comment(d.get("body") or "")
+        if author in ("AutoModerator", "[deleted]") or not author:
+            continue
+        if body in ("[deleted]", "[removed]") or len(body) < 40:
+            continue
+        out.append(
+            {
+                "by": author,
+                "score": d.get("score") or 0,
+                "url": "https://www.reddit.com" + (d.get("permalink") or ""),
+                "excerpt": body[:REACTION_EXCERPT],
+            }
+        )
+        if len(out) >= REACTION_PER_THREAD:
+            break
+    return out
+
+
+def translate_comments(items: list[dict], title: str) -> None:
+    """抜粋を、1〜2文の日本語にして `ja` に入れる。訳せなければその件は落ちる。"""
+    provider = llm()
+    if provider is None or not items:
+        return
+    listing = "\n\n".join(f"{n + 1}. {i['excerpt']}" for n, i in enumerate(items))
+    prompt = (
+        f"海外のアニメ掲示板で、アニメ『{title}』の最新話について書かれた感想です。\n"
+        "それぞれを、日本語の1〜2文（80字程度）にしてください。条件:\n"
+        "・逐語訳ではなく、何を面白がっているか・何に驚いたかが伝わる要約にする\n"
+        "・作品の内容に踏み込んだ強いネタバレは避け、反応の温度が分かる程度にとどめる\n"
+        "・番号と本文だけを、入力と同じ順番・同じ行数で出力する\n\n"
+        f"{listing}\n"
+    )
+    try:
+        text = provider.generate_text(prompt)
+    except Exception as e:  # noqa: BLE001
+        print(f"  ! 反応の日本語化に失敗: {type(e).__name__}", file=sys.stderr)
+        return
+    lines = [
+        re.sub(r"^\s*\d+[.)、]\s*", "", ln).strip()
+        for ln in text.splitlines()
+        if ln.strip()
+    ]
+    if len(lines) != len(items):
+        print("  ! 反応の行数が合わないので、この回は載せません", file=sys.stderr)
+        return
+    for item, ja in zip(items, lines):
+        item["ja"] = ja
+
+
+def collect_reactions(seasons: list[dict], anime: dict, cache: dict) -> dict:
+    """最新の週の上位作品について、海外のコメントの抜粋を日本語で用意する。"""
+    token = reddit_token()
+    if token is None:
+        return {k: v for k, v in cache.items()}  # 認証情報が無ければ既存のまま
+
+    latest = seasons[0]["weeks"][-1]
+    rows = sorted(latest["rows"], key=lambda r: r["r"] or 999)[:REACTION_TOP_N]
+    fresh: dict[str, dict] = {}
+    for r in rows:
+        pid = post_id(r.get("url") or "")
+        if not pid:
+            continue
+        if pid in cache:                       # 一度取ったスレッドは取り直さない
+            fresh[pid] = cache[pid]
+            continue
+        a = anime.get(str(r["id"])) or {}
+        name = a.get("ja") or a.get("en") or a.get("romaji") or ""
+        items = fetch_comments(token, r["url"])
+        if not items:
+            continue
+        translate_comments(items, name)
+        items = [
+            {k: v for k, v in i.items() if k != "excerpt"}   # 原文は残さない
+            for i in items
+            if i.get("ja")
+        ]
+        if items:
+            fresh[pid] = {"url": r["url"], "items": items, "fetched": jst_now().date().isoformat()}
+            print(f"  反応: {name} 第{r['ep']}話 {len(items)}件")
+        time.sleep(1.2)
+
+    # 古い週のぶんは落とす
+    keep = set()
+    for sea in seasons:
+        for w in sea["weeks"][-REACTION_KEEP_WEEKS:]:
+            for r in w["rows"]:
+                keep.add(post_id(r.get("url") or ""))
+    return {k: v for k, v in {**cache, **fresh}.items() if k in keep}
+
+
 # ---------------------------------------------------------------- 日本語の解説
 
 LLM_KEYS = ("GEMINI_API_KEY", "GROQ_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY")
@@ -580,7 +772,10 @@ def build() -> None:
     news = fetch_news()
     news_gists(news, notes)
 
+    reactions = collect_reactions(seasons, anime, load_json(REACTIONS_PATH, {}))
+
     save_json(TITLES_PATH, titles_cache)
+    save_json(REACTIONS_PATH, reactions)
     save_json(NOTES_PATH, {k: v for k, v in notes.items() if k in USED_NOTES})
     save_json(
         OUTPUT_PATH,
@@ -590,11 +785,16 @@ def build() -> None:
             "anime": anime,
             "seasons": seasons,
             "news": news,
+            "reactions": reactions,
         },
         compact=True,
     )
     total = sum(len(s["weeks"]) for s in seasons)
-    print(f"書き出しました: {OUTPUT_PATH}（{len(seasons)}季節 / {total}週 / {len(anime)}作品）")
+    voices = sum(len(v["items"]) for v in reactions.values())
+    print(
+        f"書き出しました: {OUTPUT_PATH}"
+        f"（{len(seasons)}季節 / {total}週 / {len(anime)}作品 / 反応{voices}件）"
+    )
 
 
 if __name__ == "__main__":

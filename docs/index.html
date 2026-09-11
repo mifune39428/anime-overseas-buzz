@@ -117,6 +117,17 @@ dialog::backdrop{background:rgba(0,0,0,.66)}
 .trend th{color:var(--dim2);font-weight:600;text-align:right}
 .trend th:first-child,.trend td:first-child{text-align:left}
 .links{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.voices{margin-top:16px}
+.voices h3{font-size:12px;margin:0 0 2px;letter-spacing:.06em;color:var(--accent)}
+.voices .cap{font-size:11px;color:var(--dim2);margin:0 0 8px}
+.voices ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:7px}
+.voices li{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:9px 11px}
+.voices p{margin:0;font-size:13px;line-height:1.65}
+.voices a.who{
+  display:inline-block;margin-top:5px;font-size:11px;color:var(--dim);
+  text-decoration:none;border-bottom:1px dotted var(--dim2);
+}
+
 .links a{
   font-size:12.5px;padding:7px 12px;border-radius:9px;background:var(--card);
   border:1px solid var(--line);text-decoration:none;color:var(--fg);
@@ -192,8 +203,9 @@ footer p{margin:0 0 6px}
   <footer>
     <p><b>数字の出どころ</b>：週間の票（カルマ）とコメント数は r/anime の各話感想スレッドの集計、
       スコアと登録者数・日本語タイトルは MyAnimeList（Jikan API）です。</p>
-    <p>このサイトは<b>海外の書き込みそのものは掲載しません</b>。集まった数字と、そこから書き起こした
-      日本語の解説、そして原文スレッドへのリンクだけを置いています。実際の反応は各リンク先でご覧ください。</p>
+    <p><b>海外の書き込みは、原文のまま載せません</b>。上位作品には反応の抜粋を日本語にしたものを数件だけ添え、
+      書き手の名前から原文のコメントに飛べるようにしています。その他は数字と、そこから書き起こした
+      日本語の解説、そして原文スレッドへのリンクです。</p>
     <p id="credit"></p>
   </footer>
 </main>
@@ -232,6 +244,8 @@ function moveBadge(row){
   if (row.dr < 0)             return ['down', '▼' + Math.abs(row.dr)];
   return ['same', '—'];
 }
+
+function postId(url){ const m = /\/comments\/([a-z0-9]+)/.exec(url || ''); return m ? m[1] : ''; }
 
 function season(){ return DATA.seasons[seasonIdx]; }
 function week(){ return season().weeks[weekIdx]; }
@@ -306,6 +320,7 @@ function renderList(){
     if (a.ja && a.en) meta.append(el('p', 't-en', a.en));
     const chips = el('div', 'chips');
     if (r.ep) chips.append(el('span', 'chip ep', '第' + r.ep + '話'));
+    if ((DATA.reactions || {})[postId(r.url)]) chips.append(el('span', 'chip', '海外の反応あり'));
     if (a.score) chips.append(el('span', 'chip', '★' + a.score.toFixed(2)));
     if (a.studio && a.studio[0]) chips.append(el('span', 'chip', a.studio[0]));
     (a.streams || []).slice(0, 2).forEach(s => chips.append(el('span', 'chip ' + streamClass(s[0]), s[0])));
@@ -462,6 +477,26 @@ function openDetail(id){
     links.append(a2);
   }
   body.append(links);
+
+  // 海外の反応（原文の抜粋を日本語にしたもの。原文はリンク先）
+  const react = row ? (DATA.reactions || {})[postId(row.url)] : null;
+  if (react && react.items && react.items.length){
+    const box = el('div', 'voices');
+    box.append(el('h3', null, 'この回の海外の反応'));
+    box.append(el('p', 'cap', '掲示板の書き込みの抜粋を日本語にしたものです。原文は名前をタップすると開きます。'));
+    const ul = el('ul');
+    react.items.forEach(v => {
+      const li = el('li');
+      li.append(el('p', null, v.ja));
+      const who = el('a', 'who', `u/${v.by}　${fmt(v.score)}票`);
+      who.href = v.url; who.target = '_blank'; who.rel = 'noopener';
+      li.append(who);
+      ul.append(li);
+    });
+    box.append(ul);
+    body.append(box);
+  }
+
   $('#dlg').showModal();
 }
 
