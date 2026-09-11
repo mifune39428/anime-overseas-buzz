@@ -1,0 +1,517 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>アニメ海外人気ウォッチ｜数字で見る海外の反応</title>
+<meta name="description" content="海外のアニメ掲示板 r/anime の各話スレッドに集まった票とコメント数を、毎週ランキングにして日本語で追いかけるサイトです。">
+<meta name="theme-color" content="#0d0f16">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<style>
+:root{
+  --bg:#0d0f16; --bg2:#141826; --card:#1a1f30; --card2:#222839;
+  --line:#2c3348; --fg:#eef1f8; --dim:#98a1bb; --dim2:#6c7590;
+  --up:#4ade80; --down:#f87171; --new:#fbbf24; --ret:#60a5fa;
+  --accent:#ff5d8f; --accent2:#7c9cff;
+  --radius:14px;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0; background:var(--bg); color:var(--fg);
+  font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;
+  font-size:15px; line-height:1.7; padding-bottom:env(safe-area-inset-bottom);
+}
+a{color:inherit}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+.wrap{max-width:860px;margin:0 auto;padding:0 14px}
+
+header{
+  background:linear-gradient(160deg,#1b2138,#0d0f16 70%);
+  border-bottom:1px solid var(--line); padding:22px 0 16px;
+}
+.brand{display:flex;align-items:center;gap:10px}
+.brand .mark{
+  width:36px;height:36px;border-radius:11px;flex:0 0 auto;
+  background:linear-gradient(140deg,var(--accent),var(--accent2));
+  display:grid;place-items:center;font-size:19px;
+}
+h1{font-size:19px;margin:0;letter-spacing:.02em}
+.tagline{color:var(--dim);font-size:12.5px;margin:8px 0 0}
+.updated{color:var(--dim2);font-size:11.5px;margin-top:6px}
+
+nav.tabs{display:flex;gap:6px;margin-top:16px;overflow-x:auto;scrollbar-width:none}
+nav.tabs::-webkit-scrollbar{display:none}
+.tab{
+  padding:7px 14px;border-radius:999px;background:var(--card);
+  border:1px solid var(--line);white-space:nowrap;font-size:13px;color:var(--dim);
+}
+.tab[aria-selected="true"]{background:var(--fg);color:#0d0f16;border-color:var(--fg);font-weight:700}
+
+.bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:16px 0 4px}
+.weeks{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none;flex:1 1 100%}
+.weeks::-webkit-scrollbar{display:none}
+.wk{
+  min-width:44px;padding:6px 10px;border-radius:10px;background:var(--card);
+  border:1px solid var(--line);font-size:12.5px;color:var(--dim);white-space:nowrap;text-align:center;
+}
+.wk[aria-selected="true"]{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
+select,input[type=search]{
+  font:inherit;font-size:13px;background:var(--card);color:var(--fg);
+  border:1px solid var(--line);border-radius:10px;padding:7px 10px;
+}
+input[type=search]{flex:1 1 150px;min-width:0}
+
+.period{color:var(--dim);font-size:12.5px;margin:10px 0 0}
+.note{
+  background:var(--card);border:1px solid var(--line);border-left:3px solid var(--accent);
+  border-radius:10px;padding:12px 14px;margin:12px 0 0;font-size:13.5px;color:#dbe1f0;
+}
+.note b{display:block;font-size:11.5px;color:var(--accent);letter-spacing:.08em;margin-bottom:4px}
+
+ol.rank{list-style:none;margin:16px 0 0;padding:0;display:flex;flex-direction:column;gap:8px}
+li.row{
+  background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+  display:grid;grid-template-columns:46px 54px 1fr auto;gap:10px;padding:10px;align-items:center;
+}
+li.row.top1{border-color:#6b4b2a;background:linear-gradient(100deg,#2a2113,var(--card) 55%)}
+li.row.top2{border-color:#4a4f5e}
+li.row.top3{border-color:#4d3a2a}
+.pos{text-align:center}
+.pos .n{font-size:22px;font-weight:800;line-height:1.1;font-variant-numeric:tabular-nums}
+.pos .d{font-size:10.5px;margin-top:2px;font-weight:700}
+.d.up{color:var(--up)} .d.down{color:var(--down)} .d.new{color:var(--new)} .d.ret{color:var(--ret)} .d.same{color:var(--dim2)}
+.thumb{width:54px;height:74px;border-radius:8px;object-fit:cover;background:var(--card2);display:block}
+.meta{min-width:0}
+.t-ja{font-size:14.5px;font-weight:700;line-height:1.45;margin:0;overflow-wrap:anywhere}
+.t-en{font-size:11.5px;color:var(--dim2);margin:2px 0 0;overflow-wrap:anywhere}
+.chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+.chip{font-size:10.5px;border:1px solid var(--line);border-radius:6px;padding:1px 6px;color:var(--dim)}
+.chip.ep{border-color:#3c4560;color:#b9c4e0}
+.chip.cr{border-color:#b4541f;color:#ff9d5c}
+.chip.nf{border-color:#7a1f24;color:#ff8087}
+.chip.dp{border-color:#1f4b8a;color:#7fb6ff}
+.nums{text-align:right;white-space:nowrap}
+.karma{font-size:19px;font-weight:800;line-height:1.15;font-variant-numeric:tabular-nums}
+.karma small{font-size:10px;color:var(--dim2);font-weight:600;display:block;margin-top:-2px}
+.sub{font-size:11px;color:var(--dim);margin-top:4px;font-variant-numeric:tabular-nums}
+.sub .dk.up{color:var(--up)} .sub .dk.down{color:var(--down)}
+
+.empty{color:var(--dim);text-align:center;padding:40px 0;font-size:13.5px}
+
+/* 作品の詳細 */
+dialog{
+  border:none;background:var(--bg2);color:var(--fg);border-radius:16px;padding:0;
+  width:min(560px,92vw);max-height:86vh;overflow:auto;overscroll-behavior:contain;
+}
+dialog::backdrop{background:rgba(0,0,0,.66)}
+.dlg{padding:18px;position:relative}
+.dlg h2{font-size:16.5px;margin:0 0 2px}
+.dlg .t-en{font-size:12px}
+.dlg .close{position:absolute;top:10px;right:12px;font-size:20px;color:var(--dim)}
+.spark{width:100%;height:auto;margin:14px 0 6px;display:block}
+.trend{width:100%;border-collapse:collapse;font-size:12px}
+.trend th,.trend td{padding:5px 6px;border-bottom:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums}
+.trend th{color:var(--dim2);font-weight:600;text-align:right}
+.trend th:first-child,.trend td:first-child{text-align:left}
+.links{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.links a{
+  font-size:12.5px;padding:7px 12px;border-radius:9px;background:var(--card);
+  border:1px solid var(--line);text-decoration:none;color:var(--fg);
+}
+
+/* ニュース */
+section.news{margin:30px 0 0}
+h2.sec{font-size:14px;margin:0 0 10px;letter-spacing:.04em}
+h2.sec span{color:var(--dim2);font-size:11.5px;font-weight:400;margin-left:6px}
+.news ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.news li a{
+  display:block;background:var(--card);border:1px solid var(--line);border-radius:10px;
+  padding:10px 12px;text-decoration:none;font-size:13.5px;
+}
+.news .en{display:block;color:var(--dim2);font-size:11px;margin-top:3px}
+.news .date{color:var(--dim2);font-size:11px}
+
+footer{margin:34px 0 0;border-top:1px solid var(--line);padding:16px 0 30px;color:var(--dim2);font-size:11.5px}
+footer a{color:var(--dim)}
+footer p{margin:0 0 6px}
+
+@media (max-width:430px){
+  li.row{grid-template-columns:38px 48px 1fr;gap:9px;padding:9px 8px}
+  .pos,.thumb{grid-row:1 / span 2}
+  .pos .n{font-size:20px}
+  .thumb{width:48px;height:66px}
+  .nums{grid-column:3;text-align:left;display:flex;align-items:baseline;gap:9px;margin-top:2px}
+  .karma{font-size:17px}
+  .karma small{display:inline;margin:0 0 0 2px}
+  .sub{margin-top:0}
+  .t-ja{font-size:13.5px}
+  .chips{margin-top:5px}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div class="brand">
+      <div class="mark">🌏</div>
+      <div>
+        <h1>アニメ海外人気ウォッチ</h1>
+        <p class="tagline">海外の掲示板でいま、どの作品が票を集めているか</p>
+      </div>
+    </div>
+    <p class="updated" id="updated"></p>
+    <nav class="tabs" id="seasons" role="tablist"></nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="bar">
+    <div class="weeks" id="weeks" role="tablist"></div>
+    <select id="sort" aria-label="並び順">
+      <option value="rank">順位どおり（カルマ順）</option>
+      <option value="dk">今週の伸び順</option>
+      <option value="c">コメント数順</option>
+      <option value="score">MALスコア順</option>
+    </select>
+    <input type="search" id="q" placeholder="作品名で絞り込み" aria-label="作品名で絞り込み">
+  </div>
+
+  <p class="period" id="period"></p>
+  <div id="note"></div>
+  <ol class="rank" id="list"></ol>
+
+  <section class="news">
+    <h2 class="sec">海外アニメニュースの見出し<span>Anime Corner（見出しとリンクのみ）</span></h2>
+    <ul id="news"></ul>
+  </section>
+
+  <footer>
+    <p><b>数字の出どころ</b>：週間の票（カルマ）とコメント数は r/anime の各話感想スレッドの集計、
+      スコアと登録者数・日本語タイトルは MyAnimeList（Jikan API）です。</p>
+    <p>このサイトは<b>海外の書き込みそのものは掲載しません</b>。集まった数字と、そこから書き起こした
+      日本語の解説、そして原文スレッドへのリンクだけを置いています。実際の反応は各リンク先でご覧ください。</p>
+    <p id="credit"></p>
+  </footer>
+</main>
+
+<dialog id="dlg"><div class="dlg">
+  <button class="close" id="dlgClose" aria-label="閉じる">×</button>
+  <div id="dlgBody"></div>
+</div></dialog>
+
+<script>
+const $ = s => document.querySelector(s);
+const fmt = n => (n ?? 0).toLocaleString('ja-JP');
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+
+let DATA = null, seasonIdx = 0, weekIdx = 0;
+
+// 配信サービスごとの色分け（よく出る3つだけ）
+function streamClass(name){
+  const n = (name || '').toLowerCase();
+  if (n.includes('crunchyroll')) return 'cr';
+  if (n.includes('netflix')) return 'nf';
+  if (n.includes('disney')) return 'dp';
+  return '';
+}
+
+function jpDate(iso){
+  if (!iso) return '';
+  const [y, m, d] = iso.split('-').map(Number);
+  return `${m}月${d}日`;
+}
+
+function moveBadge(row){
+  if (row.st === 'new')       return ['new', 'NEW'];
+  if (row.st === 'returning') return ['ret', '再登場'];
+  if (row.dr > 0)             return ['up', '▲' + row.dr];
+  if (row.dr < 0)             return ['down', '▼' + Math.abs(row.dr)];
+  return ['same', '—'];
+}
+
+function season(){ return DATA.seasons[seasonIdx]; }
+function week(){ return season().weeks[weekIdx]; }
+function info(id){ return DATA.anime[String(id)] || {}; }
+function nameOf(id){ const a = info(id); return a.ja || a.en || a.romaji || `#${id}`; }
+
+function renderSeasons(){
+  const box = $('#seasons'); box.textContent = '';
+  DATA.seasons.forEach((s, i) => {
+    const b = el('button', 'tab', s.label);
+    b.setAttribute('role', 'tab');
+    b.setAttribute('aria-selected', i === seasonIdx);
+    b.onclick = () => { seasonIdx = i; weekIdx = season().weeks.length - 1; render(); };
+    box.append(b);
+  });
+}
+
+function renderWeeks(){
+  const box = $('#weeks'); box.textContent = '';
+  season().weeks.forEach((w, i) => {
+    const b = el('button', 'wk', '第' + w.w + '週');
+    b.setAttribute('role', 'tab');
+    b.setAttribute('aria-selected', i === weekIdx);
+    b.onclick = () => { weekIdx = i; render(); };
+    box.append(b);
+  });
+  const cur = box.children[weekIdx];
+  if (cur) requestAnimationFrame(() => cur.scrollIntoView({ inline: 'center', block: 'nearest' }));
+}
+
+function sortRows(rows){
+  const mode = $('#sort').value;
+  const copy = rows.slice();
+  if (mode === 'dk')    copy.sort((a, b) => b.dk - a.dk);
+  else if (mode === 'c')     copy.sort((a, b) => b.c - a.c);
+  else if (mode === 'score') copy.sort((a, b) => (info(b.id).score || 0) - (info(a.id).score || 0));
+  else copy.sort((a, b) => (a.r || 999) - (b.r || 999));
+  return copy;
+}
+
+function renderList(){
+  const q = $('#q').value.trim().toLowerCase();
+  const list = $('#list'); list.textContent = '';
+  let rows = sortRows(week().rows);
+  if (q) {
+    rows = rows.filter(r => {
+      const a = info(r.id);
+      return [a.ja, a.en, a.romaji].some(t => (t || '').toLowerCase().includes(q));
+    });
+  }
+  if (!rows.length){ list.append(el('p', 'empty', '該当する作品がありません。')); return; }
+
+  for (const r of rows){
+    const a = info(r.id);
+    const li = el('li', 'row' + (r.r >= 1 && r.r <= 3 ? ' top' + r.r : ''));
+
+    const pos = el('div', 'pos');
+    pos.append(el('div', 'n', r.r ?? '-'));
+    const [cls, label] = moveBadge(r);
+    pos.append(el('div', 'd ' + cls, label));
+    li.append(pos);
+
+    if (a.img){
+      const img = el('img', 'thumb');
+      img.src = a.img; img.alt = ''; img.loading = 'lazy';
+      img.referrerPolicy = 'no-referrer';
+      li.append(img);
+    } else li.append(el('div', 'thumb'));
+
+    const meta = el('div', 'meta');
+    meta.append(el('p', 't-ja', a.ja || a.en || a.romaji || '?'));
+    if (a.ja && a.en) meta.append(el('p', 't-en', a.en));
+    const chips = el('div', 'chips');
+    if (r.ep) chips.append(el('span', 'chip ep', '第' + r.ep + '話'));
+    if (a.score) chips.append(el('span', 'chip', '★' + a.score.toFixed(2)));
+    if (a.studio && a.studio[0]) chips.append(el('span', 'chip', a.studio[0]));
+    (a.streams || []).slice(0, 2).forEach(s => chips.append(el('span', 'chip ' + streamClass(s[0]), s[0])));
+    meta.append(chips);
+    li.append(meta);
+
+    const nums = el('div', 'nums');
+    const k = el('div', 'karma', fmt(r.k));
+    k.append(el('small', null, '票'));
+    nums.append(k);
+    const sub = el('div', 'sub');
+    if (r.dk){
+      const dk = el('span', 'dk ' + (r.dk > 0 ? 'up' : 'down'), (r.dk > 0 ? '+' : '') + fmt(r.dk));
+      sub.append(dk, document.createTextNode(' / '));
+    }
+    sub.append(document.createTextNode('💬' + fmt(r.c)));
+    nums.append(sub);
+    li.append(nums);
+
+    li.tabIndex = 0;
+    li.onclick = () => openDetail(r.id);
+    li.onkeydown = e => { if (e.key === 'Enter') openDetail(r.id); };
+    list.append(li);
+  }
+}
+
+function renderNote(){
+  const w = week();
+  const ongoing = w.to >= new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
+  $('#period').textContent =
+    `第${w.w}週：${jpDate(w.from)}〜${jpDate(w.to)}の放送・${w.rows.length}作品`
+    + (ongoing ? '（集計中）' : '');
+  const box = $('#note'); box.textContent = '';
+  if (w.note){
+    const d = el('div', 'note');
+    d.append(el('b', null, 'この週の数字を読む'));
+    d.append(document.createTextNode(w.note));
+    box.append(d);
+  }
+}
+
+// 作品ごとの推移。分割2クールの作品は季節をまたぐので、持っている季節を全部つなぐ。
+const SEASON_JA = { winter: '冬', spring: '春', summer: '夏', fall: '秋' };
+
+function chronological(){
+  return DATA.seasons.slice().sort((a, b) =>
+    a.year - b.year || ['winter','spring','summer','fall'].indexOf(a.season)
+                     - ['winter','spring','summer','fall'].indexOf(b.season));
+}
+
+function seriesOf(id){
+  const seasons = chronological();
+  const multi = seasons.filter(s => s.weeks.some(w => w.rows.some(r => r.id === id))).length > 1;
+  const out = [];
+  for (const s of seasons){
+    for (const w of s.weeks){
+      const row = w.rows.find(r => r.id === id);
+      if (!row) continue;
+      out.push({
+        label: (multi ? String(s.year).slice(2) + SEASON_JA[s.season] + ' ' : '') + '第' + w.w + '週',
+        k: row.k, r: row.r, c: row.c, ep: row.ep,
+      });
+    }
+  }
+  return out;
+}
+
+function sparkline(series){
+  const pts = series.slice();
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('class', 'spark');
+  svg.setAttribute('viewBox', '0 0 320 96');
+  if (pts.length < 2) return svg;
+
+  const max = Math.max(...pts.map(p => p.k)), min = Math.min(...pts.map(p => p.k));
+  const span = Math.max(1, max - min);
+  const x = i => 6 + i * (308 / Math.max(1, pts.length - 1));
+  const y = v => 88 - ((v - min) / span) * 76;
+  const d = pts.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p.k).toFixed(1)}`).join(' ');
+
+  const area = document.createElementNS(ns, 'path');
+  area.setAttribute('d', `${d} L${x(pts.length - 1).toFixed(1)},92 L6,92 Z`);
+  area.setAttribute('fill', 'rgba(255,93,143,.16)');
+  svg.append(area);
+
+  const line = document.createElementNS(ns, 'path');
+  line.setAttribute('d', d);
+  line.setAttribute('fill', 'none');
+  line.setAttribute('stroke', '#ff5d8f');
+  line.setAttribute('stroke-width', '2');
+  line.setAttribute('stroke-linejoin', 'round');
+  svg.append(line);
+
+  pts.forEach((p, i) => {
+    const c = document.createElementNS(ns, 'circle');
+    c.setAttribute('cx', x(i)); c.setAttribute('cy', y(p.k)); c.setAttribute('r', 2.6);
+    c.setAttribute('fill', '#ff5d8f');
+    svg.append(c);
+  });
+  return svg;
+}
+
+function openDetail(id){
+  const a = info(id), series = seriesOf(id), body = $('#dlgBody');
+  body.textContent = '';
+  body.append(el('h2', null, a.ja || a.en || a.romaji || `#${id}`));
+  if (a.en) body.append(el('p', 't-en', a.en));
+
+  const chips = el('div', 'chips');
+  if (a.score)   chips.append(el('span', 'chip', 'MAL ★' + a.score.toFixed(2)));
+  if (a.members) chips.append(el('span', 'chip', '登録 ' + fmt(a.members) + '人'));
+  (a.studio || []).forEach(s => chips.append(el('span', 'chip', s)));
+  (a.streams || []).forEach(s => chips.append(el('span', 'chip ' + streamClass(s[0]), s[0])));
+  body.append(chips);
+
+  body.append(sparkline(series));
+
+  const table = el('table', 'trend');
+  const head = el('tr');
+  ['週', '話', '順位', '票', 'コメント'].forEach(h => head.append(el('th', null, h)));
+  table.append(head);
+  series.forEach(p => {
+    const tr = el('tr');
+    tr.append(el('td', null, p.label));
+    tr.append(el('td', null, p.ep ? p.ep + '話' : '-'));
+    tr.append(el('td', null, p.r ? p.r + '位' : '-'));
+    tr.append(el('td', null, fmt(p.k)));
+    tr.append(el('td', null, fmt(p.c)));
+    table.append(tr);
+  });
+  body.append(table);
+
+  const links = el('div', 'links');
+  // 選んでいる週にいなければ（分割2クールなど）、直近でその作品が載った週のスレッドへ送る
+  let row = week().rows.find(r => r.id === id);
+  if (!row){
+    for (const s of chronological().reverse()){
+      for (const w of s.weeks.slice().reverse()){
+        const hit = w.rows.find(r => r.id === id);
+        if (hit){ row = hit; break; }
+      }
+      if (row) break;
+    }
+  }
+  if (row && row.url){
+    const a1 = el('a', null, 'この回の海外スレッドを読む（r/anime）');
+    a1.href = row.url; a1.target = '_blank'; a1.rel = 'noopener';
+    links.append(a1);
+  }
+  if (a.mal){
+    const a2 = el('a', null, 'MyAnimeList');
+    a2.href = a.mal; a2.target = '_blank'; a2.rel = 'noopener';
+    links.append(a2);
+  }
+  body.append(links);
+  $('#dlg').showModal();
+}
+
+function renderNews(){
+  const box = $('#news'); box.textContent = '';
+  (DATA.news || []).forEach(n => {
+    const li = el('li');
+    const a = el('a');
+    a.href = n.url; a.target = '_blank'; a.rel = 'noopener';
+    a.append(document.createTextNode(n.ja || n.en));
+    if (n.ja) a.append(el('span', 'en', n.en));
+    if (n.date) a.append(el('span', 'date', ' ' + jpDate(n.date)));
+    li.append(a); box.append(li);
+  });
+  if (!box.children.length) box.append(el('p', 'empty', '見出しを取得できませんでした。'));
+}
+
+function render(){
+  renderSeasons(); renderWeeks(); renderNote(); renderList();
+}
+
+async function main(){
+  try {
+    DATA = await fetch('data.json?' + Date.now()).then(r => r.json());
+  } catch {
+    $('#list').append(el('p', 'empty', 'データを読み込めませんでした。'));
+    return;
+  }
+  if (!DATA.seasons || !DATA.seasons.length || !DATA.seasons[0].weeks.length){
+    $('#list').append(el('p', 'empty', 'まだ今季のデータがありません。'));
+    return;
+  }
+  seasonIdx = 0;
+  weekIdx = Math.max(0, season().weeks.length - 1);
+  $('#updated').textContent = '最終更新 ' + (DATA.generated_at || '').replace('T', ' ').slice(0, 16);
+  const c = DATA.credit || {};
+  if (c.url){
+    const p = $('#credit');
+    p.append(document.createTextNode('週間カルマ集計：'));
+    const a = el('a', null, `${c.name}（${c.author}）`);
+    a.href = c.url; a.target = '_blank'; a.rel = 'noopener';
+    p.append(a);
+  }
+  $('#sort').onchange = renderList;
+  $('#q').oninput = renderList;
+  $('#dlgClose').onclick = () => $('#dlg').close();
+  $('#dlg').onclick = e => { if (e.target.id === 'dlg') $('#dlg').close(); };
+  render(); renderNews();
+}
+main();
+</script>
+</body>
+</html>
