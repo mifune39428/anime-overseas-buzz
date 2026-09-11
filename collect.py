@@ -58,6 +58,9 @@ ANIME_CORNER_FEED = "https://animecorner.me/feed/"
 
 # r/anime のコメント。未認証では取れないので、Reddit の「script」アプリを登録して
 # REDDIT_CLIENT_ID / REDDIT_CLIENT_SECRET を .env に置いたときだけ動く。
+# 認証なしで読める RSS。票数は入らないが、登録の手間なしで反応を拾える（既定の経路）。
+REDDIT_RSS = "https://www.reddit.com/r/anime/comments/{post_id}.rss"
+# 認証情報を置いた場合だけ使う経路。票数が取れて、票の多い順に並べられる。
 REDDIT_TOKEN_URL = "https://www.reddit.com/api/v1/access_token"
 REDDIT_COMMENTS = "https://oauth.reddit.com/comments/{post_id}"
 
@@ -98,6 +101,10 @@ REACTION_PER_THREAD = 5
 REACTION_EXCERPT = 600
 # 何週ぶんの反応を残すか（古い週のものは落とす）。
 REACTION_KEEP_WEEKS = 3
+# RSS は連続で叩くとすぐ429を返す。実測では数十秒空ければ通る。
+REACTION_INTERVAL = 30
+# 1回の実行で新しく取りに行くスレッド数。残りは次の実行に回る。
+REACTION_MAX_PER_RUN = 5
 
 
 # ---------------------------------------------------------------- 小道具
@@ -536,51 +543,114 @@ def fetch_comments(token: str, url: str) -> list[dict]:
                 "excerpt": body[:REACTION_EXCERPT],
             }
         )
-        if len(out) >= REACTION_PER_THREAD:
+        if len(out) >= 12:      # 候補として多めに返し、選別は japanese_voices に任せる
             break
     return out
 
 
-def translate_comments(items: list[dict], title: str) -> None:
-    """抜粋を、1〜2文の日本語にして `ja` に入れる。訳せなければその件は落ちる。"""
+BOT_AUTHORS = {"AutoLovepon", "AnimeMod", "AutoModerator", "[deleted]", ""}
+
+
+def fetch_comments_rss(url: str) -> list[dict]:
+    """認証なしで、スレッドのコメントを RSS から拾う。
+
+    Reddit の RSS には票数が入らないので「票の多い順」には並べられない。
+    代わりに、そのスレッドに付いた書き込みから、地の文のあるものを拾って
+    後段の LLM に選ばせる。取れるのは書き手・原文リンク・抜粋だけ。
+    """
+    pid = post_id(url)
+    if not pid:
+        return []
+    raw = fetch(f"{REDDIT_RSS.format(post_id=pid)}?limit=50", tries=1)
+    if not raw:
+        return []
+    try:
+        root = ET.fromstring(raw)
+    except ET.ParseError:
+        return []
+
+    ns = {"a": "http://www.w3.org/2005/Atom"}
+    out = []
+    for entry in root.findall("a:entry", ns):
+        author = (entry.findtext("a:author/a:name", default="", namespaces=ns) or "").removeprefix("/u/")
+        if author in BOT_AUTHORS:
+            continue
+        link = entry.find("a:link", ns)
+        body = clean_comment(
+            re.sub(r"<[^>]+>", " ", entry.findtext("a:content", default="", namespaces=ns) or "")
+        )
+        if len(body) < 60:
+            continue
+        out.append(
+            {
+                "by": author,
+                "url": (link.get("href") if link is not None else url),
+                "excerpt": body[:REACTION_EXCERPT],
+            }
+        )
+    return out
+
+
+def japanese_voices(items: list[dict], title: str, want: int) -> list[dict]:
+    """候補のコメントから代表的なものを選び、日本語の1〜2文にして返す。
+
+    RSS 経路には票数が無いので、どれが読まれた書き込みかを機械的に決められない。
+    そこで候補をまとめて渡し、反応として分かりやすいものを選ばせる。
+    選別に失敗したときは、先頭から順に訳す形へ落とす。
+    """
     provider = llm()
     if provider is None or not items:
-        return
-    listing = "\n\n".join(f"{n + 1}. {i['excerpt']}" for n, i in enumerate(items))
+        return []
+    pool = items[:12]
+    listing = "\n\n".join(f"{n + 1}. {i['excerpt']}" for n, i in enumerate(pool))
     prompt = (
         f"海外のアニメ掲示板で、アニメ『{title}』の最新話について書かれた感想です。\n"
-        "それぞれを、日本語の1〜2文（80字程度）にしてください。条件:\n"
+        f"この中から、反応として分かりやすいものを{min(want, len(pool))}件選び、\n"
+        "それぞれ日本語の1〜2文（80字程度）にしてください。条件:\n"
         "・逐語訳ではなく、何を面白がっているか・何に驚いたかが伝わる要約にする\n"
-        "・作品の内容に踏み込んだ強いネタバレは避け、反応の温度が分かる程度にとどめる\n"
-        "・番号と本文だけを、入力と同じ順番・同じ行数で出力する\n\n"
+        "・強いネタバレは避け、反応の温度が分かる程度にとどめる\n"
+        "・あいさつだけ、絵文字だけ、他の人への短い相づちのようなものは選ばない\n"
+        "・出力は1行につき「元の番号|日本語」の形だけ。説明や見出しは書かない\n\n"
         f"{listing}\n"
     )
     try:
         text = provider.generate_text(prompt)
     except Exception as e:  # noqa: BLE001
         print(f"  ! 反応の日本語化に失敗: {type(e).__name__}", file=sys.stderr)
-        return
-    lines = [
-        re.sub(r"^\s*\d+[.)、]\s*", "", ln).strip()
-        for ln in text.splitlines()
-        if ln.strip()
-    ]
-    if len(lines) != len(items):
-        print("  ! 反応の行数が合わないので、この回は載せません", file=sys.stderr)
-        return
-    for item, ja in zip(items, lines):
-        item["ja"] = ja
+        return []
+
+    out = []
+    used = set()
+    for line in text.splitlines():
+        m = re.match(r"\s*(\d+)\s*[|｜]\s*(.+)", line.strip())
+        if not m:
+            continue
+        idx = int(m.group(1)) - 1
+        ja = m.group(2).strip()
+        if idx in used or not (0 <= idx < len(pool)) or len(ja) < 10:
+            continue
+        used.add(idx)
+        out.append({**{k: v for k, v in pool[idx].items() if k != "excerpt"}, "ja": ja})
+        if len(out) >= want:
+            break
+    if not out:
+        print("  ! 反応を選べなかったので、この回は載せません", file=sys.stderr)
+    return out
 
 
 def collect_reactions(seasons: list[dict], anime: dict, cache: dict) -> dict:
-    """最新の週の上位作品について、海外のコメントの抜粋を日本語で用意する。"""
-    token = reddit_token()
-    if token is None:
-        return {k: v for k, v in cache.items()}  # 認証情報が無ければ既存のまま
+    """最新の週の上位作品について、海外のコメントの抜粋を日本語で用意する。
 
+    既定は認証の要らない RSS。`REDDIT_CLIENT_ID` を置いてあれば、票数が取れて
+    票の多い順に並べられる API 経路を使う。
+    """
+    token = reddit_token()
     latest = seasons[0]["weeks"][-1]
     rows = sorted(latest["rows"], key=lambda r: r["r"] or 999)[:REACTION_TOP_N]
+
     fresh: dict[str, dict] = {}
+    fetched = 0
+    misses = 0
     for r in rows:
         pid = post_id(r.get("url") or "")
         if not pid:
@@ -588,28 +658,42 @@ def collect_reactions(seasons: list[dict], anime: dict, cache: dict) -> dict:
         if pid in cache:                       # 一度取ったスレッドは取り直さない
             fresh[pid] = cache[pid]
             continue
+        if fetched >= REACTION_MAX_PER_RUN:    # 残りは次の実行で
+            continue
+
+        if fetched:
+            time.sleep(1.2 if token else REACTION_INTERVAL)
+        candidates = fetch_comments(token, r["url"]) if token else fetch_comments_rss(r["url"])
+        fetched += 1
+        if not candidates:
+            misses += 1
+            if misses >= 2:
+                print(
+                    "  Reddit が続けて応じないので、この回は打ち切ります"
+                    "（RSSの回数制限のことが多い）",
+                    file=sys.stderr,
+                )
+                break
+            continue
+        misses = 0
+
         a = anime.get(str(r["id"])) or {}
         name = a.get("ja") or a.get("en") or a.get("romaji") or ""
-        items = fetch_comments(token, r["url"])
-        if not items:
-            continue
-        translate_comments(items, name)
-        items = [
-            {k: v for k, v in i.items() if k != "excerpt"}   # 原文は残さない
-            for i in items
-            if i.get("ja")
-        ]
+        items = japanese_voices(candidates, name, REACTION_PER_THREAD)
         if items:
-            fresh[pid] = {"url": r["url"], "items": items, "fetched": jst_now().date().isoformat()}
+            fresh[pid] = {
+                "url": r["url"],
+                "items": items,
+                "fetched": jst_now().date().isoformat(),
+            }
             print(f"  反応: {name} 第{r['ep']}話 {len(items)}件")
-        time.sleep(1.2)
 
     # 古い週のぶんは落とす
     keep = set()
     for sea in seasons:
         for w in sea["weeks"][-REACTION_KEEP_WEEKS:]:
-            for r in w["rows"]:
-                keep.add(post_id(r.get("url") or ""))
+            for row in w["rows"]:
+                keep.add(post_id(row.get("url") or ""))
     return {k: v for k, v in {**cache, **fresh}.items() if k in keep}
 
 

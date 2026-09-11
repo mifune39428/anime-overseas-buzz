@@ -488,7 +488,7 @@ function openDetail(id){
     react.items.forEach(v => {
       const li = el('li');
       li.append(el('p', null, v.ja));
-      const who = el('a', 'who', `u/${v.by}　${fmt(v.score)}票`);
+      const who = el('a', 'who', v.score ? `u/${v.by}　${fmt(v.score)}票` : `u/${v.by}`);
       who.href = v.url; who.target = '_blank'; who.rel = 'noopener';
       li.append(who);
       ul.append(li);
