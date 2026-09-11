@@ -850,8 +850,12 @@ def build() -> None:
     budget = [NOTE_MAX_PER_RUN]
     pairs = [(sea, w) for sea in seasons for w in sea["weeks"]]
     pairs.sort(key=lambda pw: (pw[1]["from"]), reverse=True)
-    for sea, week in pairs:
+    for i, (sea, week) in enumerate(pairs):
         week["note"] = week_note(sea["key"], week, anime, notes, budget)
+        # 最新の週はメールの本文にもなるので、しくじったらこの回のうちにもう一度試す
+        # （古い週に生成枠を食われて、いつまでも空のままになるのを防ぐ）
+        if i == 0 and not week["note"]:
+            week["note"] = week_note(sea["key"], week, anime, notes, budget)
 
     news = fetch_news()
     news_gists(news, notes)
