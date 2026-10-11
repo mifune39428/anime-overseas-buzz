@@ -71,6 +71,34 @@ input[type=search]{flex:1 1 150px;min-width:0}
 }
 .note b{display:block;font-size:11.5px;color:var(--accent);letter-spacing:.08em;margin-bottom:4px}
 
+/* ---- この週のまとめ（いちばん上に出す。数字から組み立てるので、AIの文ではない） */
+.digest{
+  position:relative;overflow:hidden;background:var(--card);border:1px solid var(--line);
+  border-radius:var(--radius);padding:14px 16px 12px 20px;margin:16px 0 0;
+}
+.digest::before{content:"";position:absolute;inset:0 auto 0 0;width:4px;background:var(--accent)}
+.dg-label{font-size:11.5px;font-weight:800;color:var(--accent);letter-spacing:.08em}
+.dg-label span{color:var(--dim);font-weight:600;letter-spacing:.02em;margin-left:6px}
+.digest h2{font-size:16.5px;font-weight:800;line-height:1.5;margin:6px 0 10px}
+.digest ol{list-style:none;margin:0;padding:0;counter-reset:dg}
+.digest li{position:relative;padding-left:28px;font-size:13.5px;line-height:1.75;margin-bottom:8px}
+.digest li::before{
+  counter-increment:dg;content:counter(dg);position:absolute;left:0;top:3px;width:19px;height:19px;
+  border-radius:50%;background:rgba(255,93,143,.16);color:var(--accent);font-size:11px;font-weight:800;
+  display:grid;place-items:center;
+}
+.digest li.more{display:none}
+.digest.open li.more{display:list-item}
+.digest li button,.digest li a{
+  border:0;background:none;padding:0;margin:0;font:inherit;color:var(--fg);font-weight:700;
+  cursor:pointer;text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:3px;
+}
+.digest li button:hover,.digest li a:hover{text-decoration-color:var(--accent)}
+.digest .num{color:var(--up);font-weight:700;white-space:nowrap}
+.dg-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:2px}
+.dg-note{font-size:11px;color:var(--dim2)}
+.dg-toggle{border:0;background:none;padding:0;cursor:pointer;font:inherit;font-size:13px;font-weight:700;color:var(--accent);white-space:nowrap}
+
 ol.rank{list-style:none;margin:16px 0 0;padding:0;display:flex;flex-direction:column;gap:8px}
 li.row{
   background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
@@ -180,6 +208,7 @@ footer p{margin:0 0 6px}
 </header>
 
 <main class="wrap">
+  <section class="digest" id="digest" hidden></section>
   <div class="bar">
     <div class="weeks" id="weeks" role="tablist"></div>
     <select id="sort" aria-label="並び順">
@@ -362,6 +391,97 @@ function renderNote(){
   }
 }
 
+// この週のまとめ。順位表の数字だけから組み立てる（AIに書かせた文ではない）。
+// 作品名を押すと、その作品の推移と海外の反応が開く。
+let digestOpen = false;
+
+function renderDigest(){
+  const box = $('#digest'); box.textContent = '';
+  const w = week();
+  const rows = w.rows.filter(r => r.r).slice().sort((a, b) => a.r - b.r);
+  if (rows.length < 3){ box.hidden = true; return; }
+  box.hidden = false;
+  box.classList.toggle('open', digestOpen);
+
+  const ongoing = w.to >= new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
+  const isLatest = seasonIdx === 0 && weekIdx === season().weeks.length - 1;
+  // 文の中に「作品名のボタン」と「数字」を混ぜて並べるための小さな部品。
+  const title = id => { const b = el('button', null, `「${nameOf(id)}」`); b.type = 'button'; b.onclick = () => openDetail(id); return b; };
+  const num = text => el('span', 'num', text);
+  const points = [];
+
+  // 1. 首位
+  const top = rows[0], second = rows[1];
+  const how = top.st === 'new' ? '初登場で首位に立ちました。'
+    : top.st === 'returning' ? '圏外から戻って首位に立ちました。'
+    : top.dr > 0 ? `前週の${top.r + top.dr}位から首位に上がりました。`
+    : '前週に続いて首位です。';
+  points.push([title(top.id), `が第${top.ep}話で`, num(`${fmt(top.k)}票`), `を集めて1位。${how}2位の`,
+               title(second.id), 'とは', num(`${fmt(top.k - second.k)}票`), '差です。']);
+
+  // 2. 票の伸び（前の週にも載っていた作品だけ）
+  const risers = rows.filter(r => !r.st && r.dk > 0).sort((a, b) => b.dk - a.dk);
+  if (risers.length){
+    const r = risers[0];
+    const move = r.dr > 0 ? `、順位も${r.r + r.dr}位から${r.r}位へ上げました` : `（${r.r}位）`;
+    points.push(['票をいちばん伸ばしたのは', title(r.id), 'で、前の週より', num(`+${fmt(r.dk)}票`), `${move}。`]);
+  }
+
+  // 3. 初登場
+  const fresh = rows.filter(r => r.st === 'new');
+  if (fresh.length){
+    // 首位そのものが初登場のときは、1つ目の文と同じ話になるので、その次の作品を挙げる。
+    const others = fresh.filter(r => r.id !== top.id);
+    if (others.length < fresh.length && others.length){
+      const f = others[0];
+      points.push([`この週から加わったのは${fresh.length}作品。首位のほかでは`, title(f.id), `の${f.r}位（`, num(`${fmt(f.k)}票`), '）がいちばん上です。']);
+    } else if (others.length){
+      const f = others[0];
+      points.push([`この週から加わったのは${fresh.length}作品。いちばん上は`, title(f.id), `の${f.r}位（`, num(`${fmt(f.k)}票`), '）です。']);
+    }
+  }
+
+  // 4. 議論の多さ
+  const talk = rows.slice().sort((a, b) => b.c - a.c)[0];
+  if (talk && talk.c){
+    points.push(['感想スレッドの書き込みがいちばん多かったのは', title(talk.id), 'で、', num(`${fmt(talk.c)}件`), 'でした。']);
+  }
+
+  // 5. ニュース（いま見ているのが最新の週のときだけ）
+  // 日本語の一行にできている見出しだけ使う（英語のまま混ぜると読みにくい）。
+  const news = isLatest ? (DATA.news || []).find(n => n.ja) : null;
+  if (news){
+    const a = el('a', null, news.ja);
+    a.href = news.url; a.target = '_blank'; a.rel = 'noopener';
+    points.push(['海外のアニメニュースでは、', a, `（${news.source}）。`]);
+  }
+
+  const label = el('div', 'dg-label', `第${w.w}週のまとめ`);
+  label.append(el('span', null, `${jpDate(w.from)}〜${jpDate(w.to)}${ongoing ? ' · 集計中' : ''} · 数字から自動作成`));
+  box.append(label);
+  box.append(el('h2', null, `「${nameOf(top.id)}」が首位` + (fresh.length ? `、初登場は${fresh.length}作品` : '')));
+
+  // スマホで1画面目を埋めないよう、最初は2つだけ見せる。
+  const FIRST = 2;
+  const ol = el('ol');
+  points.forEach((parts, n) => {
+    const li = el('li', n >= FIRST ? 'more' : null);
+    parts.forEach(p => li.append(typeof p === 'string' ? document.createTextNode(p) : p));
+    ol.append(li);
+  });
+  box.append(ol);
+
+  const foot = el('div', 'dg-foot');
+  foot.append(el('span', 'dg-note', ongoing ? 'まだ集計の途中の数字です' : ''));
+  if (points.length > FIRST){
+    const btn = el('button', 'dg-toggle', digestOpen ? '閉じる' : `続きを読む（あと${points.length - FIRST}件）`);
+    btn.type = 'button';
+    btn.onclick = () => { digestOpen = !digestOpen; renderDigest(); };
+    foot.append(btn);
+  }
+  box.append(foot);
+}
+
 // 作品ごとの推移。分割2クールの作品は季節をまたぐので、持っている季節を全部つなぐ。
 const SEASON_JA = { winter: '冬', spring: '春', summer: '夏', fall: '秋' };
 
@@ -515,7 +635,7 @@ function renderNews(){
 }
 
 function render(){
-  renderSeasons(); renderWeeks(); renderNote(); renderList();
+  renderSeasons(); renderWeeks(); renderDigest(); renderNote(); renderList();
 }
 
 async function main(){
